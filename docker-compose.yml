@@ -1,0 +1,43 @@
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: foodflow
+      POSTGRES_USER: foodflow
+      POSTGRES_PASSWORD: foodflow_dev_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foodflow -d foodflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://foodflow:foodflow_dev_password@database:5432/foodflow?schema=public
+      JWT_SECRET: replace-this-development-secret-before-deploying
+      CLIENT_ORIGIN: http://localhost:5173
+      PORT: 4000
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    depends_on:
+      - server
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:
