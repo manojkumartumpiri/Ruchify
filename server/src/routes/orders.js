@@ -17,12 +17,23 @@ router.post('/', requireAuth, async (request, response, next) => {
     if (menuItems.length !== ids.length) return response.status(400).json({ message: 'One or more menu items are unavailable.' });
     const prices = new Map(menuItems.map((item) => [item.id, item.price]));
     const total = requestedItems.reduce((sum, item) => sum + Number(prices.get(item.menuItemId)) * item.quantity, 0);
+    const deliveryNote = request.body.deliveryNote ? String(request.body.deliveryNote).trim().slice(0, 300) : null;
     const order = await prisma.order.create({
-      data: { userId: request.user.id, restaurantId, total, items: { create: requestedItems.map((item) => ({ ...item, unitPrice: prices.get(item.menuItemId) })) } },
+      data: { userId: request.user.id, restaurantId, total, deliveryNote, items: { create: requestedItems.map((item) => ({ ...item, unitPrice: prices.get(item.menuItemId) })) } },
       include: orderInclude,
     });
     return response.status(201).json({ order });
   } catch (error) { return next(error); }
+});
+
+router.get('/analytics/summary', requireAuth, requireAdmin, async (_request, response, next) => {
+  try {
+    const [orders, delivered] = await Promise.all([
+      prisma.order.aggregate({ _count: { id: true }, _sum: { total: true } }),
+      prisma.order.count({ where: { status: 'DELIVERED' } }),
+    ]);
+    response.json({ summary: { orderCount: orders._count.id, revenue: Number(orders._sum.total || 0), delivered } });
+  } catch (error) { next(error); }
 });
 
 router.get('/my', requireAuth, async (request, response, next) => {

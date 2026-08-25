@@ -15,10 +15,25 @@ function restaurantData(body) {
   };
 }
 
-router.get('/', async (_request, response, next) => {
+router.get('/', async (request, response, next) => {
   try {
-    const restaurants = await prisma.restaurant.findMany({ orderBy: { rating: 'desc' } });
+    const search = typeof request.query.search === 'string' ? request.query.search.trim() : '';
+    const cuisine = typeof request.query.cuisine === 'string' ? request.query.cuisine.trim() : '';
+    const sort = request.query.sort === 'delivery' ? 'delivery' : request.query.sort === 'name' ? 'name' : 'rating';
+    const where = {
+      ...(cuisine ? { cuisine: { equals: cuisine, mode: 'insensitive' } } : {}),
+      ...(search ? { OR: [{ name: { contains: search, mode: 'insensitive' } }, { cuisine: { contains: search, mode: 'insensitive' } }] } : {}),
+    };
+    const orderBy = sort === 'delivery' ? { deliveryMins: 'asc' } : sort === 'name' ? { name: 'asc' } : { rating: 'desc' };
+    const restaurants = await prisma.restaurant.findMany({ where, orderBy });
     response.json({ restaurants });
+  } catch (error) { next(error); }
+});
+
+router.get('/meta/cuisines', async (_request, response, next) => {
+  try {
+    const rows = await prisma.restaurant.findMany({ select: { cuisine: true }, distinct: ['cuisine'], orderBy: { cuisine: 'asc' } });
+    response.json({ cuisines: rows.map((row) => row.cuisine) });
   } catch (error) { next(error); }
 });
 
